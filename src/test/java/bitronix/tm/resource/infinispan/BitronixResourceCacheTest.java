@@ -15,9 +15,8 @@
  */
 package bitronix.tm.resource.infinispan;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import org.infinispan.Cache;
 import org.infinispan.configuration.cache.Configuration;
@@ -30,8 +29,6 @@ import org.junit.Test;
 
 import bitronix.tm.BitronixTransactionManager;
 import bitronix.tm.TransactionManagerServices;
-import bitronix.tm.resource.infinispan.BitronixCacheResourceRegistrator;
-import bitronix.tm.resource.infinispan.BitronixTransactionManagerLookup;
 
 public class BitronixResourceCacheTest {
 	private BitronixTransactionManager tm;
@@ -50,19 +47,19 @@ public class BitronixResourceCacheTest {
 		tm = TransactionManagerServices.getTransactionManager();
 
 		cm = new DefaultCacheManager();
-		cm.addListener(new BitronixCacheResourceRegistrator());
 
 		Configuration conf = new ConfigurationBuilder()
 				.read(cm.getDefaultCacheConfiguration())
 				.transaction()
 					.transactionManagerLookup(new BitronixTransactionManagerLookup())
 					.transactionMode(TransactionMode.TRANSACTIONAL)
+					.autoCommit(false)
 					.useSynchronization(false)
 					.recovery().enable()
 				.build();
 		
-		cm.defineConfiguration("default", conf);
-		cache = cm.getCache("default");
+		cm.defineConfiguration("cacheUnderTest", conf);
+		cache = cm.getCache("cacheUnderTest");
 	}
 	
 	@After
@@ -77,7 +74,7 @@ public class BitronixResourceCacheTest {
 		cache.put("test", "test");
 		tm.commit();
 
-		assertThat(cache.get("test"), is("test"));
+		assertEquals("test", cache.get("test"));
 	}
 
 	@Test
@@ -86,6 +83,11 @@ public class BitronixResourceCacheTest {
 		cache.put("test", "test");
 		tm.rollback();
 
-		assertThat(cache.get("test"), is(nullValue()));
+		assertFalse(cache.containsKey("test"));
+	}
+
+	@Test(expected=IllegalStateException.class)
+	public void cacheFailsWithoutTransaction() throws Exception {
+		cache.put("test", "test");
 	}
 }

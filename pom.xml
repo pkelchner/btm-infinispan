@@ -4,7 +4,7 @@
 	
 	<groupId>org.codehaus.btm</groupId>
 	<artifactId>btm-infinispan</artifactId>
-	<version>0.1.0</version>
+	<version>0.2.0</version>
 	<name>Bitronix XAResourceProvider for Infinispan</name>
 
 	<build>
@@ -20,6 +20,29 @@
 				</configuration>
 			</plugin>
 			
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.2.1</version>
+				
+				<executions>
+					<execution>
+						<id>serialize_component_metadata</id>
+						<phase>process-classes</phase>
+						<goals>
+							<goal>java</goal>
+						</goals>
+						<configuration>
+							<mainClass>org.infinispan.factories.components.ComponentMetadataPersister</mainClass>
+							<arguments>
+								<argument>${project.build.outputDirectory}</argument>
+								<argument>${project.build.outputDirectory}/${project.artifactId}-component-metadata.dat</argument>
+							</arguments>
+						</configuration>
+					</execution>					
+				</executions>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.felix</groupId>
 				<artifactId>maven-bundle-plugin</artifactId>
@@ -80,6 +103,12 @@
 			<artifactId>log4j-over-slf4j</artifactId>
 			<version>1.6.0</version>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>javax.inject</groupId>
+			<artifactId>javax.inject</artifactId>
+			<version>1</version>
+			<optional>true</optional>
 		</dependency>
 	</dependencies>
 </project>

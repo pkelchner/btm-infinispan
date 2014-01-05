@@ -24,7 +24,15 @@ import javax.naming.StringRefAddr;
 import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 
+import org.infinispan.Cache;
 import org.infinispan.CacheImpl;
+import org.infinispan.configuration.cache.Configuration;
+import org.infinispan.factories.annotations.Inject;
+import org.infinispan.factories.annotations.Start;
+import org.infinispan.factories.annotations.Stop;
+import org.infinispan.transaction.TransactionMode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import bitronix.tm.internal.BitronixRuntimeException;
 import bitronix.tm.internal.XAResourceHolderState;
@@ -44,28 +52,33 @@ import bitronix.tm.resource.common.XAStatefulHolder;
  * @see BitronixCacheResourceRegistrator
  * @see BitronixTransactionManagerLookup
  */
-/* package-private */ class InfinispanXAResourceProducer extends ResourceBean implements XAResourceProducer {
+public class InfinispanXAResourceProducer extends ResourceBean implements XAResourceProducer {
+	
+	private final Logger logger = LoggerFactory.getLogger(InfinispanXAResourceProducer.class);
+	
 	private static final long serialVersionUID = 1L;
 	
+	private CacheImpl<?,?> cache;
 	private XAResource cacheXAResource;
+	private boolean registered;
 
 	private RecoveryXAResourceHolder recoveryXAResourceHolder;
-
-	/**
-	 * @param cache the cache for which this XAResourceProducer is created
-	 * 
-	 * @throws IllegalArgumentException if the cache is not configured to be 
-	 * 		{@linkplain org.infinispan.configuration.cache.TransactionConfigurationBuilder#useSynchronization(boolean) XA-capable}.
-	 */
-	public InfinispanXAResourceProducer(CacheImpl<?, ?> cache) {
+	
+	@Inject
+	public void injectComponents(Cache<?,?> cache, Configuration config) {
 		setUniqueName("infinispan-cache-"+cache.getName());
 		
-		try {
-			cacheXAResource = cache.getXAResource();
-		} catch (ClassCastException e) {
-			throw new IllegalArgumentException("The cache "+cache+" is not XA-capable. "
-					+ "Configure the cache with 'transaction().useSynchronization(false)'.");
+		if (config.transaction().transactionMode() != TransactionMode.TRANSACTIONAL) {
+			logger.debug("Will not register cache [{}] with Bitronix. The cache is not transactional.", cache.getName());
+			return;
 		}
+		
+		if (config.transaction().useSynchronization()) {
+			logger.warn("Will not register cache [{}] with Bitronix. The cache merely synchronizes with the transaction.", cache.getName());
+			return;
+		}
+		
+		this.cache = (CacheImpl<?, ?>) cache;
 	}
 	
 	@Override
@@ -99,17 +112,29 @@ import bitronix.tm.resource.common.XAStatefulHolder;
 	}
 
 	@Override
+	@Start(priority=11) // after PersistenceManagerImpl.start()
 	public void init() {
+		
+		if (cache == null) {
+			return;
+		}
+		
+		cacheXAResource = cache.getXAResource();
+		
 		try {
 			ResourceRegistrar.register(this);
+			registered = true;
 		} catch (RecoveryException e) {
 			throw new BitronixRuntimeException("error recovering " + this, e);
 		}
 	}
 
 	@Override
+	@Stop
 	public void close() {
-		ResourceRegistrar.unregister(this);
+		if (registered) {
+			ResourceRegistrar.unregister(this);
+		}		
 	}
 
 	@Override
