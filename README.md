@@ -5,7 +5,6 @@ Integrates [Infinispan](http://infinispan.org/) with [Bitronix](https://github.c
                                                                                                 
 ```java
 EmbeddedCacheManager cacheManager = ...;
-cacheManager.addListener(new BitronixCacheResourceRegistrator());
 
 Configuration conf = new ConfigurationBuilder()
     .read(cacheManager.getDefaultCacheConfiguration())
